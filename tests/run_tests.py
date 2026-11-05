@@ -364,54 +364,24 @@ async def t_live_announcements():
     assert "Time's up" in board and "Final standings" in board and "Solved by bob" in board, board
 
 
-async def t_tie_goes_to_tiebreaker():
+async def t_tie_ends_in_draw():
     ch, m = await begin()
     f = main.cf
     f.solve("alice", "1100A")  # 400
     f.solve("alice", "800A")   # 100 -> 500
     f.solve("bob", "1200A")    # 500
-    for _ in range(100):
-        if len(f.picked) == 6:
-            break
-        await asyncio.sleep(0.1)
-    assert len(f.picked) == 6
-    tb = f.picked[-1]
-    assert tb["rating"] == 1000 and tb["key"] != "1000A"  # R+200, a different problem
-    f.solve("bob", tb["key"])
     await finish(m)
     row = result_rows()[0]
-    assert row["winner"] == "bob" and row["tiebreak"] == 1, dict(row)
-    assert "Tie" in ch.text()
+    assert row["winner"] == "draw" and row["tiebreak"] == 0 and (row["score1"], row["score2"]) == (500, 500), dict(row)
+    assert "draw" in ch.text().lower()
 
 
-async def t_zero_zero_tie_and_tiebreak_race():
+async def t_zero_zero_tie_ends_in_draw():
     ch, m = await begin()
-    f = main.cf
-    for _ in range(100):
-        if len(f.picked) == 6:
-            break
-        await asyncio.sleep(0.1)
-    tb = f.picked[-1]["key"]
-    f.solve("alice", tb)   # same second, lower id wins
-    f.solve("bob", tb)
     await finish(m)
-    assert result_rows()[0]["winner"] == "alice"
-
-
-async def t_tiebreak_ignores_old_solves():
-    ch, m = await begin()
-    f = main.cf
-    for _ in range(100):
-        if len(f.picked) == 6:
-            break
-        await asyncio.sleep(0.1)
-    tb = f.picked[-1]["key"]
-    f.solve("alice", tb, at=int(time.time()) - 500)  # before tiebreak began
-    await asyncio.sleep(0.4)
-    assert not m.task.done(), "old submission must not decide the tie-breaker"
-    f.solve("bob", tb)
-    await finish(m)
-    assert result_rows()[0]["winner"] == "bob"
+    row = result_rows()[0]
+    assert row["winner"] == "draw" and row["tiebreak"] == 0 and (row["score1"], row["score2"]) == (0, 0), dict(row)
+    assert "draw" in ch.text().lower()
 
 
 async def t_codeforces_errors_during_match():
@@ -1016,13 +986,6 @@ async def t_stuck_judging_gives_up():
     assert result_rows()[0]["winner"] == "alice"
 
 
-async def t_tiebreak_unavailable_hands_to_organizers():
-    ch, m = await begin()
-    main.cf.fail_pick = True
-    await finish(m)
-    assert "decide manually" in ch.text() and not result_rows() and free(100)
-
-
 async def t_start_match_send_failure_frees_room():
     class Broken(FakeChannel):
         async def send(self, content=None, **kw):
@@ -1233,29 +1196,6 @@ async def t_restart_during_setup_starts_again():
     assert len(m.problems) == 5 and m.start and "starting" in ch.text() and "LOCKOUT STARTED" in ch.text()
     main.cf.solve("alice", "800A")
     await finish(m)
-
-
-async def t_restart_during_tiebreaker_keeps_problem():
-    ch0, m = await begin()
-    f = main.cf
-    f.solve("alice", "1100A")
-    f.solve("alice", "800A")
-    f.solve("bob", "1200A")
-    for _ in range(100):
-        if m.tie:
-            break
-        await asyncio.sleep(0.1)
-    assert m.tie
-    tb, since = m.tie, m.tie_since
-    ch = RestartChannel(100)
-    restart(ch)
-    await main.resume_matches()
-    m2 = main.matches[100]
-    assert m2.tie == tb and m2.tie_since == since
-    f.solve("bob", tb["key"])
-    await finish(m2)
-    assert result_rows()[0]["winner"] == "bob" and len([p for p in f.picked if p["rating"] == 1000]) == 2  # 1 problem + 1 tiebreak
-    assert not db.all_active()
 
 
 # ------------------------------------------------ live board and countdown

@@ -31,7 +31,7 @@ Because of this, Lockout is not only "who solves more". It is also **who solves 
 | Wrong submissions | **No penalty** |
 | Match length | Set by the challenger (`minutes`), default **15 minutes** |
 | Winner | Most points when time ends |
-| Tie | **Tie-breaker problem**: first accepted submission wins |
+| Tie | Ends in a **draw** directly |
 | Result | Winner **advances**, loser is **knocked out** (in competition rooms) |
 
 ---
@@ -43,7 +43,7 @@ Because of this, Lockout is not only "who solves more". It is also **who solves 
 - Problems are drawn **randomly** from the Codeforces problemset, and each has a **rating**.
 - **Fairness filter:** a problem is only used if **neither player has ever submitted to it** (any verdict). Problems are also checked by **name**, so the Div. 1 / Div. 2 twin of a problem you've seen is excluded too.
 - **Interactive problems are never used.**
-- No problem repeats within a match, and the tie-breaker is always a fresh problem.
+- No problem repeats within a match.
 - Problems are shown on the board with their points, rating, and a link.
 
 ### Points per problem
@@ -92,7 +92,7 @@ Harder problems are worth more, so a single late hard solve can beat several eas
 8. **Play.** Solve and submit on Codeforces **as normal, on your own account**. Nothing is submitted through Discord. The room checks Codeforces every few seconds and announces solves.
 9. **Time's up.** The board switches to "Time's up".
 10. **Judging grace.** A short grace period (20 seconds), plus up to 3 more minutes if a submission made in time is still sitting in the judging queue, so last-second submissions are judged fairly.
-11. **Result.** Higher score wins. If level, go to the tie-breaker.
+11. **Result.** Higher score wins. If level, the match ends in a draw.
 12. **Announcement.** The room announces the winner and final score. The winner advances.
 
 ### The challenge
@@ -104,14 +104,11 @@ Harder problems are worth more, so a single late hard solve can beat several eas
 
 ---
 
-## 6. Ties and the tie-breaker
+## 6. Ties and Draws
 
-- If both players have the **same score** when time and judging end, a **tie-breaker** begins.
-- One **fresh problem** (neither player has seen it) is posted, with rating = **base rating + 200**.
-- There is **no time limit**. The **first accepted submission** wins the match.
-- Only submissions made **after the tie-breaker was posted** count.
-- The tie-breaker winner is recorded as the match winner (and noted as "won the tie-breaker").
-- A 0-0 match also ends in a tie-breaker.
+- If both players have the **same score** when time and judging end, the match ends directly in a **draw**.
+- There is no tie-breaker problem: equal points at the end convert immediately to a draw.
+- A 0-0 match also ends in a draw.
 
 ---
 
@@ -167,13 +164,12 @@ Important: **your Codeforces handle is how your solves are tracked**. Use the re
 | Submission made after time ends | Ignored |
 | Many wrong submissions | No effect (no penalty) |
 | Opponent solved the problem already | You can still submit, but it gives you no points |
-| Score level at the end | Tie-breaker problem |
+| Score level at the end | Converts directly to a **draw** |
 | Codeforces down or unreachable | Retries several times; if it still fails, organizers decide manually |
 | Challenge ignored | Expires after 2 minutes, room is freed |
 | Organizer cancels a match | Match ends, the room is free again, no result is recorded |
 | Bot restarts mid-match | The match resumes with the same problems and clock |
 | Problem pool at a rating exhausted | Match can't start, and the room is freed (very high or very low ratings have fewer problems) |
-| Couldn't pick a tie-breaker | Organizers decide manually |
 
 ---
 
@@ -218,7 +214,7 @@ Important: **your Codeforces handle is how your solves are tracked**. Use the re
 - **Lockout:** once someone gets AC on a problem, the opponent cannot score from it.
 - **Base rating:** the rating the challenger picks. The 5 problems go up from there in steps of 100.
 - **Board:** the live message showing problems, points, ratings, owners, and time left.
-- **Tie-breaker:** an extra problem (base + 200) used when scores are level. First AC wins.
+- **Draw:** when scores are level at the end, the match concludes directly as a draw.
 - **Advance / knocked out:** the winner proceeds in the tournament, the loser is eliminated.
 - **Practice room:** a room where matches don't count.
 - **Judging queue:** Codeforces testing a submission. The system waits for these at the end.

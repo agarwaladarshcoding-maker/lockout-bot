@@ -229,18 +229,28 @@ async def countdown(m: Match):
         await asyncio.sleep(min(TICK, rest))
 
 
-def result(m: Match, winner: int, tied: bool) -> discord.Embed:
+def result(m: Match, winner: int | None) -> discord.Embed:
     a, b = m.scores()
-    how = "wins the tie-breaker" if tied else "wins"
+    if winner is None:
+        if m.practice:
+            return discord.Embed(
+                title="🏁 Practice match over", color=TIE,
+                description=f"🤝 It's a draw!\n\n**Final score:** {m.name(0)} **{a}** – **{b}** {m.name(1)}\n\n"
+                            "_Practice match: it doesn't count for the competition._",
+            )
+        return discord.Embed(
+            title="🏁 Match over", color=TIE,
+            description=f"🤝 It's a draw!\n\n**Final score:** {m.name(0)} **{a}** – **{b}** {m.name(1)}",
+        )
     if m.practice:
         return discord.Embed(
             title="🏁 Practice match over", color=WIN,
-            description=f"🏆 {m.name(winner)} {how}!\n\n**Final score:** {m.name(0)} **{a}** – **{b}** {m.name(1)}\n\n"
+            description=f"🏆 {m.name(winner)} wins!\n\n**Final score:** {m.name(0)} **{a}** – **{b}** {m.name(1)}\n\n"
                         "_Practice match: it doesn't count for the competition._",
         )
     return discord.Embed(
         title="🏁 Match over", color=WIN,
-        description=f"🏆 {m.name(winner)} {how} and **advances**!\n❌ {m.name(1 - winner)} is knocked out.\n\n"
+        description=f"🏆 {m.name(winner)} wins and **advances**!\n❌ {m.name(1 - winner)} is knocked out.\n\n"
                     f"**Final score:** {m.name(0)} **{a}** – **{b}** {m.name(1)}",
     )
 
@@ -297,19 +307,14 @@ async def run_match(m: Match):
 
         ticker.cancel()
         a, b = m.scores()
-        tied = a == b
-        await m.refresh("Scores are level: tie-breaker in progress." if tied else "Final standings.")
-        winner = (await tiebreak(m)) if tied else (0 if a > b else 1)
-        if winner is None:
-            await m.channel.send("⚠️ Couldn't get a tie-breaker problem from Codeforces. Organizers, please decide manually.")
-            return
+        winner = 0 if a > b else (1 if b > a else None)
+        await m.refresh("Final standings.")
         if not m.practice:  # practice matches never touch the competition's results
+            winner_handle = m.players[winner]["handle"] if winner is not None else "draw"
             db.save_result(channel_id, m.players[0]["handle"], m.players[1]["handle"], a, b,
-                           m.players[winner]["handle"], tied)
+                           winner_handle, False)
         db.drop_active(channel_id)  # a restart after this must not replay a finished match
-        if tied:
-            await m.refresh(f"Final standings. Tie-breaker won by {safe(m.players[winner]['handle'])}.")
-        await m.channel.send(f"{mentions(m)}, the match is over!", embed=result(m, winner, tied))
+        await m.channel.send(f"{mentions(m)}, the match is over!", embed=result(m, winner))
     except asyncio.CancelledError:
         shutting_down = True  # also /lockout endmatch, which drops the saved match itself
         raise
@@ -323,40 +328,6 @@ async def run_match(m: Match):
             matches.pop(channel_id)
         if not shutting_down:  # a restart must leave the saved match for on_ready to resume
             db.drop_active(channel_id)
-
-
-async def tiebreak(m: Match) -> int | None:
-    """Index of the first player to solve a fresh problem, or None if none could be picked."""
-    if m.tie:  # picked before a restart: same problem, same clock
-        p, since = m.tie, m.tie_since
-    else:
-        for _ in range(FINAL_RETRIES):
-            try:
-                p = await cf.pick(m.rating + 200, m.seen | used(m.problems))
-                break
-            except Exception as e:
-                log.warning("tiebreak pick failed: %s", e)
-                await asyncio.sleep(POLL)
-        else:
-            return None
-        since = int(time.time())
-        m.tie, m.tie_since = p, since
-        m.save()
-    a, _ = m.scores()
-    await m.channel.send(f"{mentions(m)}, time's up and it's a tie!", embed=discord.Embed(
-        title="⚔️ Tie-breaker", color=TIE,
-        description=f"Both players have **{a}** points. The first accepted submission on this problem wins:\n\n"
-                    f"[{p['name']}]({p['url']}) ({p['rating']})",
-    ))
-    while True:
-        await asyncio.sleep(POLL)
-        try:
-            first, _ = await accepted(m, {p["key"]}, since, None)
-        except Exception as e:
-            log.warning("tiebreak poll failed: %s", e)
-            continue
-        if p["key"] in first:
-            return first[p["key"]]
 
 
 async def reply(inter: discord.Interaction, msg: str):
@@ -688,7 +659,7 @@ async def help(inter: discord.Interaction):
         f"3. `/lockout challenge @opponent rating [minutes]`: the opponent presses **Accept**. Minutes is optional (default {MATCH_SECONDS / 60:g}).\n"
         f"4. 5 problems appear (rating to rating+400, worth 100 to 500 points).\n"
         "5. First accepted submission on Codeforces takes the problem. Wrong submissions have no penalty.\n"
-        "6. Most points wins. A tie gets a tie-breaker problem, and the first to solve it wins.\n"
+        "6. Most points wins. If scores are level, the match ends in a draw.\n"
         "`/lockout score`: live score in the current room.\n"
         "**Practice:** challenge someone in an **extra-N** room (Extra Rooms). Same game, but it doesn't count for the competition."
     )
@@ -989,10 +960,11 @@ async def match_history(inter: discord.Interaction):
     if not results:
         return await inter.response.send_message("No matches finished yet.", ephemeral=True)
     names = {u["handle"].lower(): u["real_name"] for u in db.all_users()}
-    who = lambda h: f"{names[h.lower()]} ({h})" if h.lower() in names else h  # noqa: E731
+    who = lambda h: f"{names[h.lower()]} ({h})" if h and h.lower() in names else (h or "draw")  # noqa: E731
     rows = [
         f"{n:>3}. {time.strftime('%d %b %H:%M', time.localtime(r['finished_at']))}  "
-        f"{who(r['p1'])} {r['score1']}-{r['score2']} {who(r['p2'])}  ->  winner: {who(r['winner'])}"
+        f"{who(r['p1'])} {r['score1']}-{r['score2']} {who(r['p2'])}  ->  "
+        + ("draw" if not r["winner"] or r["winner"].lower() == "draw" else f"winner: {who(r['winner'])}")
         + (" (tie-breaker)" if r["tiebreak"] else "")
         for n, r in enumerate(results, 1)
     ]
